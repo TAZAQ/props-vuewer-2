@@ -134,7 +134,7 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
             
             // Каждое свойство на новой строке
             entries.forEach { entry ->
-                append("   ${entry.key}: ${entry.value}\n")
+                append("   [[${entry.key}]]: ${entry.value}\n")
             }
             
             append(" */")
