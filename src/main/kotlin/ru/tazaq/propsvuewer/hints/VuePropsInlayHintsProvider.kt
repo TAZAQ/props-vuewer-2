@@ -125,32 +125,35 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
     }
     
     private fun createPropsPresentation(propsInfo: Map<String, String>, factory: PresentationFactory): InlayPresentation {
+        // Выводим свойства в одну строку с разделителем ";"
         val text = buildString {
-            append(" /* \n")
+            append(" /* ")
             
             // Ограничим количество отображаемых свойств для лучшей читаемости
-            val maxPropsToShow = 10
+            val maxPropsToShow = 5
             val entries = propsInfo.entries.toList()
             
             if (entries.size > maxPropsToShow) {
-                // Отображаем только первые maxPropsToShow элементов
-                entries.take(maxPropsToShow).forEach { entry ->
-                    append("   ${entry.key}: ${entry.value}\n")
+                // Отображаем только первые maxPropsToShow элементов с разделителем ";"
+                entries.take(maxPropsToShow).forEachIndexed { index, entry ->
+                    if (index > 0) append("; ")
+                    append("${entry.key}: ${entry.value}")
                 }
                 
                 // Добавляем информацию о скрытых свойствах
-                append("   ... (${entries.size - maxPropsToShow} more props)\n")
+                append("; ... (${entries.size - maxPropsToShow} more props)")
             } else {
                 // Отображаем все свойства, если их не слишком много
-                entries.forEach { entry ->
-                    append("   ${entry.key}: ${entry.value}\n")
+                entries.forEachIndexed { index, entry ->
+                    if (index > 0) append("; ")
+                    append("${entry.key}: ${entry.value}")
                 }
             }
             
             append(" */")
         }
         
-        LOG.info("Создана подсказка в столбик: $text")
+        LOG.info("Создана подсказка с разделителем: $text")
         return factory.smallText(text)
     }
     

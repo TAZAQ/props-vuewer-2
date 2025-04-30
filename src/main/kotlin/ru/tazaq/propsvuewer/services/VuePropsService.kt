@@ -148,33 +148,12 @@ class VuePropsService(private val project: Project) {
      * Создает демонстрационные props для тестирования на основе имени ссылки
      */
     private fun createDemoPropsForReference(refName: String): Map<String, String> {
-        // Если имя ссылки похоже на компонент, создаем для него демо-свойства
-        return when {
-            refName.contains("Props", ignoreCase = true) -> {
-                mapOf(
-                    "title" to "type: String, required: true",
-                    "description" to "type: String, default: ''",
-                    "items" to "type: Array, required: true",
-                    "loading" to "type: Boolean, default: false",
-                    "maxItems" to "type: Number, default: 10"
-                )
-            }
-            refName.contains("Options", ignoreCase = true) -> {
-                mapOf(
-                    "value" to "type: [String, Number], required: true",
-                    "label" to "type: String, required: true",
-                    "disabled" to "type: Boolean, default: false"
-                )
-            }
-            refName.contains("Config", ignoreCase = true) -> {
-                mapOf(
-                    "theme" to "type: String, default: 'light'",
-                    "locale" to "type: String, default: 'en'",
-                    "debug" to "type: Boolean, default: false"
-                )
-            }
-            else -> emptyMap()
-        }
+        // Отключаем автоматическое создание демо-свойств по имени
+        // Это временное решение, пока мы не научимся правильно резолвить импорты
+        return emptyMap()
+        
+        // Для будущей реализации - здесь нужно будет искать определения в импортированных файлах
+        // или через PSI элементы определять реальный тип переменной
     }
 
     private fun extractPropsFromObjectLiteral(objectLiteral: JSObjectLiteralExpression): Map<String, String> {
