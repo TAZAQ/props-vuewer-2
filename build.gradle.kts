@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "ru.tazaq"
-version = "0.0.8"
+version = "0.0.9"
 
 repositories {
     mavenCentral()
@@ -28,7 +28,7 @@ intellijPlatform {
             sinceBuild = "251"
         }
         changeNotes = """
-            Initial version with Vue 2 props visualization.
+            Улучшенная версия с многострочным отображением всех props Vue компонентов.
         """.trimIndent()
     }
 }

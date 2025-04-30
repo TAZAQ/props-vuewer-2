@@ -125,35 +125,22 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
     }
     
     private fun createPropsPresentation(propsInfo: Map<String, String>, factory: PresentationFactory): InlayPresentation {
-        // Выводим свойства в одну строку с разделителем ";"
+        // Выводим все свойства построчно с переносами строк
         val text = buildString {
-            append(" /* ")
+            append(" /* \n")
             
-            // Ограничим количество отображаемых свойств для лучшей читаемости
-            val maxPropsToShow = 5
+            // Отображаем все свойства в столбик
             val entries = propsInfo.entries.toList()
             
-            if (entries.size > maxPropsToShow) {
-                // Отображаем только первые maxPropsToShow элементов с разделителем ";"
-                entries.take(maxPropsToShow).forEachIndexed { index, entry ->
-                    if (index > 0) append("; ")
-                    append("${entry.key}: ${entry.value}")
-                }
-                
-                // Добавляем информацию о скрытых свойствах
-                append("; ... (${entries.size - maxPropsToShow} more props)")
-            } else {
-                // Отображаем все свойства, если их не слишком много
-                entries.forEachIndexed { index, entry ->
-                    if (index > 0) append("; ")
-                    append("${entry.key}: ${entry.value}")
-                }
+            // Каждое свойство на новой строке
+            entries.forEach { entry ->
+                append("   ${entry.key}: ${entry.value}\n")
             }
             
             append(" */")
         }
         
-        LOG.info("Создана подсказка с разделителем: $text")
+        LOG.info("Создана многострочная подсказка: $text")
         return factory.smallText(text)
     }
     
