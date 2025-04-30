@@ -1,4 +1,5 @@
 # Plugin for intellij idea - "PropsVuewer"
+> Props Viewer + Vue 
 
 ## Description
 The plugin show (inline) the props in vue 2 components added to the props using the spread operator or during assignment of imported props.
