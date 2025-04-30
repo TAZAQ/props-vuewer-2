@@ -11,11 +11,6 @@ import com.intellij.codeInsight.hints.InlayPresentationFactory
 import com.intellij.codeInsight.hints.SettingsKey
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
 import com.intellij.codeInsight.hints.presentation.PresentationFactory
-import com.intellij.codeInsight.hints.presentation.RootInlayPresentation
-import com.intellij.lang.Language
-import com.intellij.lang.javascript.JSLanguageDialect
-import com.intellij.lang.javascript.psi.JSObjectLiteralExpression
-import com.intellij.lang.javascript.psi.JSProperty
 import com.intellij.lang.javascript.psi.JSSpreadExpression
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
@@ -38,15 +33,12 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
         }
     """.trimIndent()
     
-    // Используем строковое значение вместо константы, которая может отсутствовать в разных версиях API
-    // Используем корректный тип и значение по умолчанию
-    // InlayGroup.OTHER_GROUP для более старых версий API или InlayGroup.CODE_INSIGHTS_GROUP для новых
-    override val group = com.intellij.codeInsight.hints.InlayGroup.OTHER_GROUP
+    // Используем InlayGroup.OTHER_GROUP для совместимости с разными версиями API
+    override val group = InlayGroup.OTHER_GROUP
     
+    // Так как настройки не используются, упрощаем класс
     data class Settings(
-        var showPropTypes: Boolean = true,
-        var showRequired: Boolean = true,
-        var showDefault: Boolean = true
+        var maxPropsToShow: Int = 20
     )
     
     override fun createSettings(): Settings = Settings()
@@ -57,12 +49,8 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
         settings: Settings,
         sink: InlayHintsSink
     ): InlayHintsCollector? {
-        val logger = LOG
-        logger.info("Creating collector for file: ${file.name}")
-        
         // Проверяем, что это Vue файл или JavaScript файл с Vue компонентами
         if (!file.name.endsWith(".vue") && !file.name.endsWith(".js")) {
-            logger.info("Skipping file: not a Vue or JS file")
             return null
         }
         
@@ -71,31 +59,23 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
                 try {
                     when (element) {
                         is JSSpreadExpression -> {
-                            logger.info("Обнаружен JSSpreadExpression: ${element.text}")
-                            
                             // Проверяем, что элемент находится в определении props
                             val isInsideProps = VueFileUtils.isInsidePropsDefinition(element)
-                            logger.info("JSSpreadExpression внутри props: $isInsideProps")
                             
                             if (isInsideProps) {
-                                logger.info("Found JSSpreadExpression in props: ${element.text}")
+                                LOG.debug("Обрабатываем spread-оператор в props: ${element.text}")
                                 
                                 val project = element.project
                                 val propsService = VuePropsService.getInstance(project)
                                 val propsInfo = propsService.resolveSpreadProps(element)
                                 
-                                logger.info("Получены данные props: ${propsInfo.size} свойств")
-                                
                                 if (propsInfo.isNotEmpty()) {
-                                    logger.info("Добавляем ${propsInfo.size} свойств как отдельные блоки")
-                                    
                                     // Получаем отступ элемента
                                     val indent = getElementIndent(element, editor)
-                                    logger.info("Определен отступ элемента: '${indent.replace("\t", "\\t")}'")
                                     
-                                    // Добавляем каждое свойство отдельно
+                                    // Добавляем каждое свойство отдельно (с ограничением на количество)
                                     var lineOffset = 1
-                                    propsInfo.forEach { (propName, propValue) ->
+                                    propsInfo.entries.take(settings.maxPropsToShow).forEach { (propName, propValue) ->
                                         val propPresentation = createPropPresentation(propName, propValue, indent, factory)
                                         
                                         sink.addBlockElement(
@@ -107,28 +87,15 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
                                         )
                                     }
                                     
-                                    logger.info("Добавлено ${propsInfo.size} подсказок для свойств")
-                                } else {
-                                    logger.info("Не удалось получить информацию о свойствах для ${element.text}")
+                                    LOG.debug("Добавлены подсказки для ${propsInfo.size} свойств")
                                 }
-                            } else {
-                                logger.info("JSSpreadExpression не внутри props, пропускаем")
-                            }
-                        }
-                        
-                        is JSObjectLiteralExpression -> {
-                            if (VueFileUtils.isDirectPropsAssignment(element)) {
-                                logger.info("Found JSObjectLiteralExpression in props: ${element.text.take(30)}...")
-                                
-                                // Для прямого объявления props обрабатываем отдельные свойства
-                                // в collectSlowLineMarkers
                             }
                         }
                     }
                 } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
                     throw e // Пробрасываем ProcessCanceledException дальше
                 } catch (e: Exception) {
-                    logger.info("Error processing element ${element.text.take(30)}...: ${e.message}")
+                    LOG.error("Ошибка при обработке элемента: ${element.text.take(30)}...", e)
                 }
                 
                 return true
@@ -150,9 +117,7 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
         val indentText = document.getText(indentRange)
         
         // Извлекаем только пробелы и табы из отступа
-        val spaces = indentText.replace(Regex("[^\\s\\t]"), "")
-
-        return spaces.repeat(3)
+        return indentText.replace(Regex("[^\\s\\t]"), "").repeat(3)
     }
     
     private fun createPropPresentation(propName: String, propValue: String, indent: String, factory: PresentationFactory): InlayPresentation {
