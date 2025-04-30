@@ -18,6 +18,7 @@ import com.intellij.lang.javascript.psi.JSProperty
 import com.intellij.lang.javascript.psi.JSSpreadExpression
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import ru.tazaq.propsvuewer.services.VuePropsService
@@ -87,10 +88,14 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
                                 if (propsInfo.isNotEmpty()) {
                                     logger.info("Добавляем ${propsInfo.size} свойств как отдельные блоки")
                                     
+                                    // Получаем отступ элемента
+                                    val indent = getElementIndent(element, editor)
+                                    logger.info("Определен отступ элемента: '${indent.replace("\t", "\\t")}'")
+                                    
                                     // Добавляем каждое свойство отдельно
                                     var lineOffset = 1
                                     propsInfo.forEach { (propName, propValue) ->
-                                        val propPresentation = createPropPresentation(propName, propValue, factory)
+                                        val propPresentation = createPropPresentation(propName, propValue, indent, factory)
                                         
                                         sink.addBlockElement(
                                             element.textRange.startOffset,
@@ -130,9 +135,28 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
         }
     }
     
-    private fun createPropPresentation(propName: String, propValue: String, factory: PresentationFactory): InlayPresentation {
-        // Создаем презентацию для одного пропа
-        return factory.text("  ${propName}: ${propValue}")
+    /**
+     * Определяет отступ от начала строки до элемента
+     */
+    private fun getElementIndent(element: PsiElement, editor: Editor): String {
+        val document = editor.document
+        val elementStartOffset = element.textRange.startOffset
+        val lineNumber = document.getLineNumber(elementStartOffset)
+        val lineStartOffset = document.getLineStartOffset(lineNumber)
+        
+        // Получаем текст от начала строки до элемента
+        val indentRange = TextRange(lineStartOffset, elementStartOffset)
+        val indentText = document.getText(indentRange)
+        
+        // Извлекаем только пробелы и табы из отступа
+        val spaces = indentText.replace(Regex("[^\\s\\t]"), "")
+
+        return spaces.repeat(3)
+    }
+    
+    private fun createPropPresentation(propName: String, propValue: String, indent: String, factory: PresentationFactory): InlayPresentation {
+        // Создаем презентацию для одного пропа с отступом, соответствующим позиции переменной
+        return factory.text("$indent${propName}: ${propValue}")
     }
     
     override fun createConfigurable(settings: Settings): ImmediateConfigurable {
