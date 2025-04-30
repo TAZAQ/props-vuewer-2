@@ -10,6 +10,7 @@ import com.intellij.codeInsight.hints.InlayHintsSink
 import com.intellij.codeInsight.hints.SettingsKey
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
 import com.intellij.codeInsight.hints.presentation.PresentationFactory
+import com.intellij.codeInsight.hints.presentation.RootInlayPresentation
 import com.intellij.lang.Language
 import com.intellij.lang.javascript.JSLanguageDialect
 import com.intellij.lang.javascript.psi.JSObjectLiteralExpression
@@ -84,18 +85,23 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
                                 logger.info("Получены данные props: ${propsInfo.size} свойств")
                                 
                                 if (propsInfo.isNotEmpty()) {
-                                    val presentation = createPropsPresentation(propsInfo, factory)
-                                    logger.info("Создана презентация: ${presentation.toString()}")
+                                    logger.info("Добавляем ${propsInfo.size} свойств как отдельные блоки")
                                     
-                                    // Добавляем инлайн подсказку после spread выражения
-                                    sink.addInlineElement(
-                                        element.textRange.endOffset,
-                                        false,
-                                        presentation,
-                                        false
-                                    )
+                                    // Добавляем каждое свойство отдельно
+                                    var lineOffset = 1
+                                    propsInfo.forEach { (propName, propValue) ->
+                                        val propPresentation = createPropPresentation(propName, propValue, factory)
+                                        
+                                        sink.addBlockElement(
+                                            element.textRange.startOffset,
+                                            false,
+                                            false,
+                                            lineOffset++,
+                                            propPresentation
+                                        )
+                                    }
                                     
-                                    logger.info("Added inline hint for spread props")
+                                    logger.info("Добавлено ${propsInfo.size} подсказок для свойств")
                                 } else {
                                     logger.info("Не удалось получить информацию о свойствах для ${element.text}")
                                 }
@@ -124,26 +130,9 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
         }
     }
     
-    private fun createPropsPresentation(propsInfo: Map<String, String>, factory: PresentationFactory): InlayPresentation {
-        // Выводим все свойства построчно с переносами строк
-        val text = buildString {
-            append(" /* \n")
-            
-            // Отображаем все свойства в столбик
-            val entries = propsInfo.entries.toList()
-            
-            // Каждое свойство на новой строке
-            entries.forEach { entry ->
-                append("[[${entry.key}]]: ${entry.value}")
-                append("\n")
-                append("\n")
-            }
-            
-            append(" */")
-        }
-        
-        LOG.info("Создана многострочная подсказка: $text")
-        return factory.smallText(text)
+    private fun createPropPresentation(propName: String, propValue: String, factory: PresentationFactory): InlayPresentation {
+        // Создаем презентацию для одного пропа
+        return factory.text("  ${propName}: ${propValue}")
     }
     
     override fun createConfigurable(settings: Settings): ImmediateConfigurable {
