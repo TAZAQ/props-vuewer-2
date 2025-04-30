@@ -7,6 +7,7 @@ import com.intellij.codeInsight.hints.InlayGroup
 import com.intellij.codeInsight.hints.InlayHintsCollector
 import com.intellij.codeInsight.hints.InlayHintsProvider
 import com.intellij.codeInsight.hints.InlayHintsSink
+import com.intellij.codeInsight.hints.InlayPresentationFactory
 import com.intellij.codeInsight.hints.SettingsKey
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
 import com.intellij.codeInsight.hints.presentation.PresentationFactory
@@ -155,8 +156,12 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
     }
     
     private fun createPropPresentation(propName: String, propValue: String, indent: String, factory: PresentationFactory): InlayPresentation {
-        // Создаем презентацию для одного пропа с отступом, соответствующим позиции переменной
-        return factory.text("$indent${propName}: ${propValue}")
+        val text = "$indent${propName}: ${propValue}"
+        
+        return factory.container(
+            factory.text(text),
+            padding = InlayPresentationFactory.Padding(0, 0, 5, 5)
+        )
     }
     
     override fun createConfigurable(settings: Settings): ImmediateConfigurable {

@@ -88,7 +88,7 @@ class VuePropsService(private val project: Project) {
                     if (reference == null) {
                         LOG.info("Could not resolve reference: ${expression.text}")
                         // Для отладки создадим тестовое свойство
-                        return mapOf("propFromRef1" to "type: String, required: true")
+                        return mapOf("propFromRef1" to "String, required: true")
                     }
                     
                     LOG.info("Resolved reference: ${reference.text.take(30)}...")
@@ -97,7 +97,7 @@ class VuePropsService(private val project: Project) {
                     if (declaration == null) {
                         LOG.info("Could not find variable declaration for: ${reference.text.take(30)}...")
                         // Для отладки создадим тестовое свойство
-                        return mapOf("propFromRef2" to "type: Number, default: 42")
+                        return mapOf("propFromRef2" to "Number, default: 42")
                     }
                     
                     LOG.info("Found variable declaration: ${declaration.text.take(30)}...")
@@ -106,7 +106,7 @@ class VuePropsService(private val project: Project) {
                     if (objectLiteral == null) {
                         LOG.info("Could not get object literal from declaration: ${declaration.text.take(30)}...")
                         // Для отладки создадим тестовое свойство
-                        return mapOf("propFromRef3" to "type: Boolean, default: false")
+                        return mapOf("propFromRef3" to "Boolean, default: false")
                     }
                     
                     LOG.info("Found object literal: ${objectLiteral.text.take(30)}...")
@@ -115,7 +115,7 @@ class VuePropsService(private val project: Project) {
                     if (result.isEmpty()) {
                         LOG.info("Не удалось извлечь свойства из объектного литерала")
                         // Для отладки создадим тестовое свойство
-                        return mapOf("propFromRef4" to "type: Object, required: true")
+                        return mapOf("propFromRef4" to "Object, required: true")
                     }
                     
                     result
@@ -124,7 +124,7 @@ class VuePropsService(private val project: Project) {
                 } catch (e: Exception) {
                     LOG.info("Error resolving reference expression: ${e.message}")
                     // Для отладки создадим тестовое свойство с информацией об ошибке
-                    mapOf("propFromRef5" to "type: Array, default: []")
+                    mapOf("propFromRef5" to "Array, default: []")
                 }
             }
             is JSObjectLiteralExpression -> {
@@ -132,14 +132,14 @@ class VuePropsService(private val project: Project) {
                 if (result.isEmpty()) {
                     LOG.info("Не удалось извлечь свойства из JSObjectLiteralExpression")
                     // Для отладки создадим тестовое свойство
-                    return mapOf("propFromObj" to "type: Function, required: false")
+                    return mapOf("propFromObj" to "Function, required: false")
                 }
                 result
             }
             else -> {
-                LOG.info("Unsupported expression type: ${expression.javaClass.name}")
+                LOG.info("Unsupported expression ${expression.javaClass.name}")
                 // Для отладки создадим тестовое свойство
-                mapOf("propFromUnknown" to "type: Any, default: undefined")
+                mapOf("propFromUnknown" to "Any, default: undefined")
             }
         }
     }
@@ -186,14 +186,14 @@ class VuePropsService(private val project: Project) {
                         var hasType = false
                         var hasRequired = false
                         var hasDefault = false
-                        
+
                         value.properties.forEach { prop ->
                             val propName = prop.name ?: return@forEach
                             val propValue = prop.value?.text?.trim() ?: return@forEach
                             
                             when (propName) {
                                 "type" -> {
-                                    append("type: $propValue")
+                                    append("$propValue")
                                     hasType = true
                                 }
                                 "required" -> {
@@ -205,6 +205,10 @@ class VuePropsService(private val project: Project) {
                                     if (hasType || hasRequired) append(", ")
                                     append("default: $propValue")
                                     hasDefault = true
+                                }
+                                "validator" -> {
+                                    if (hasType || hasRequired || hasDefault) append(", ")
+                                    append("validator: $propValue")
                                 }
                             }
                         }
