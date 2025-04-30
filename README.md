@@ -4,8 +4,7 @@
 The plugin show (inline) the props in vue 2 components added to the props using the spread operator or during assignment of imported props.
 
 ## Current status
-it works, but crookedly
-![](https://github.com/user-attachments/assets/1432696f-2a9f-480b-a86f-f6b18d6badfd)
+![](https://github.com/user-attachments/assets/64c5bb97-9a7f-4a4b-a7b6-c829527c73c7)
 
 
 ## Example of MLazyListBaseProps
