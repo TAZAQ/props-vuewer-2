@@ -100,8 +100,10 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
                             }
                         }
                     }
+                } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+                    throw e // Пробрасываем ProcessCanceledException дальше
                 } catch (e: Exception) {
-                    logger.error("Error processing element ${element.text.take(30)}...: ${e.message}", e)
+                    logger.info("Error processing element ${element.text.take(30)}...: ${e.message}")
                 }
                 
                 return true

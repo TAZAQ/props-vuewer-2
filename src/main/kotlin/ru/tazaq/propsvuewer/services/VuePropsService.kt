@@ -50,8 +50,10 @@ class VuePropsService(private val project: Project) {
                     }
                 }
             }
+        } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+            throw e // Пробрасываем ProcessCanceledException дальше
         } catch (e: Exception) {
-            LOG.error("Error processing direct props: ${e.message}", e)
+            LOG.info("Error processing direct props: ${e.message}")
         }
         
         LOG.info("Resolved direct props: $result")
@@ -88,8 +90,10 @@ class VuePropsService(private val project: Project) {
                     LOG.info("Found object literal: ${objectLiteral.text.take(30)}...")
                     
                     extractPropsFromObjectLiteral(objectLiteral)
+                } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+                    throw e // Пробрасываем ProcessCanceledException дальше
                 } catch (e: Exception) {
-                    LOG.error("Error resolving reference expression: ${e.message}", e)
+                    LOG.info("Error resolving reference expression: ${e.message}")
                     emptyMap()
                 }
             }
@@ -163,8 +167,10 @@ class VuePropsService(private val project: Project) {
                 }
                 else -> JsFileResolver.getPropertyValueAsString(property)
             }
+        } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+            throw e // Пробрасываем ProcessCanceledException дальше
         } catch (e: Exception) {
-            LOG.error("Error extracting property details: ${e.message}", e)
+            LOG.info("Error extracting property details: ${e.message}")
             ""
         }
     }
