@@ -127,13 +127,32 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
     private fun createPropsPresentation(propsInfo: Map<String, String>, factory: PresentationFactory): InlayPresentation {
         val text = buildString {
             append(" /* ")
-            propsInfo.entries.forEachIndexed { index, (propName, propDetails) ->
-                if (index > 0) append(", ")
-                append("$propName: $propDetails")
+            
+            // Ограничим количество отображаемых свойств для лучшей читаемости
+            val maxPropsToShow = 10
+            val entries = propsInfo.entries.toList()
+            
+            if (entries.size > maxPropsToShow) {
+                // Отображаем только первые maxPropsToShow элементов
+                entries.take(maxPropsToShow).forEachIndexed { index, entry ->
+                    if (index > 0) append(", ")
+                    append("${entry.key}: ${entry.value}")
+                }
+                
+                // Добавляем информацию о скрытых свойствах
+                append(", ... (${entries.size - maxPropsToShow} more props)")
+            } else {
+                // Отображаем все свойства, если их не слишком много
+                entries.forEachIndexed { index, entry ->
+                    if (index > 0) append(", ")
+                    append("${entry.key}: ${entry.value}")
+                }
             }
+            
             append(" */")
         }
         
+        LOG.info("Создана подсказка: $text")
         return factory.smallText(text)
     }
     
