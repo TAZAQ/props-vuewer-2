@@ -141,7 +141,7 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
         }
         
         LOG.info("Создана многострочная подсказка: $text")
-        return factory.smallText(text)
+        return factory.text(text)
     }
     
     override fun createConfigurable(settings: Settings): ImmediateConfigurable {
