@@ -134,14 +134,16 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
             
             // Каждое свойство на новой строке
             entries.forEach { entry ->
-                append("   [[${entry.key}]]: ${entry.value}\n")
+                append("[[${entry.key}]]: ${entry.value}")
+                append("\n")
+                append("\n")
             }
             
             append(" */")
         }
         
         LOG.info("Создана многострочная подсказка: $text")
-        return factory.text(text)
+        return factory.smallText(text)
     }
     
     override fun createConfigurable(settings: Settings): ImmediateConfigurable {
