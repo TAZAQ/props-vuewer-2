@@ -5,6 +5,7 @@ The plugin show (inline) the props in vue 2 components added to the props using 
 
 ## Current status
 it works, but crookedly
+![](https://github.com/user-attachments/assets/1432696f-2a9f-480b-a86f-f6b18d6badfd)
 
 
 ## Example of MLazyListBaseProps
