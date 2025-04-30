@@ -1,11 +1,11 @@
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "1.9.25"
+    id("org.jetbrains.kotlin.jvm") version "2.1.20"
     id("org.jetbrains.intellij.platform") version "2.3.0"
 }
 
 group = "ru.tazaq"
-version = "1.0"
+version = "0.0.2"
 
 repositories {
     mavenCentral()
@@ -16,19 +16,20 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        create("IU", "2024.2.5")
+        create("IU", "2025.1")
+        bundledPlugin("JavaScript")
+        bundledPlugin("org.jetbrains.plugins.vue")
     }
 }
 
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "242"
+            sinceBuild = "251"
         }
-
         changeNotes = """
-      Initial version
-    """.trimIndent()
+            Initial version with Vue 2 props visualization.
+        """.trimIndent()
     }
 }
 
@@ -38,6 +39,9 @@ tasks {
         targetCompatibility = "21"
     }
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        kotlinOptions.jvmTarget = "21"
+        kotlinOptions {
+            jvmTarget = "21"
+            freeCompilerArgs = listOf("-Xjvm-default=all")
+        }
     }
 }

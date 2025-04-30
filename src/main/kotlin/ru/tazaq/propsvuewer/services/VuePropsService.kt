@@ -1,0 +1,171 @@
+package ru.tazaq.propsvuewer.services
+
+import com.intellij.lang.javascript.psi.JSExpression
+import com.intellij.lang.javascript.psi.JSObjectLiteralExpression
+import com.intellij.lang.javascript.psi.JSProperty
+import com.intellij.lang.javascript.psi.JSReferenceExpression
+import com.intellij.lang.javascript.psi.JSSpreadExpression
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiManager
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.util.PsiTreeUtil
+import ru.tazaq.propsvuewer.util.JsFileResolver
+
+@Service(Service.Level.PROJECT)
+class VuePropsService(private val project: Project) {
+    private val LOG = Logger.getInstance(VuePropsService::class.java)
+
+    companion object {
+        fun getInstance(project: Project): VuePropsService {
+            return project.service()
+        }
+    }
+
+    fun resolveSpreadProps(spreadExpression: JSSpreadExpression): Map<String, String> {
+        LOG.info("Resolving spread props for: ${spreadExpression.text}")
+        val operand = spreadExpression.expression
+        if (operand == null) {
+            LOG.info("No operand found in spread expression")
+            return emptyMap()
+        }
+        return resolveProps(operand)
+    }
+
+    fun resolveDirectProps(propsExpression: JSObjectLiteralExpression): Map<String, String> {
+        LOG.info("Resolving direct props for object literal: ${propsExpression.text.take(30)}...")
+        val result = mutableMapOf<String, String>()
+        
+        try {
+            propsExpression.properties.forEach { property ->
+                val propName = property.name
+                if (propName != null) {
+                    LOG.info("Processing property: $propName")
+                    val propValue = extractPropertyDetails(property)
+                    if (propValue.isNotEmpty()) {
+                        result[propName] = propValue
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            LOG.error("Error processing direct props: ${e.message}", e)
+        }
+        
+        LOG.info("Resolved direct props: $result")
+        return result
+    }
+
+    private fun resolveProps(expression: JSExpression): Map<String, String> {
+        LOG.info("Resolving props for expression: ${expression.text.take(30)}...")
+        return when (expression) {
+            is JSReferenceExpression -> {
+                try {
+                    val reference = expression.resolve()
+                    if (reference == null) {
+                        LOG.info("Could not resolve reference: ${expression.text}")
+                        return emptyMap()
+                    }
+                    
+                    LOG.info("Resolved reference: ${reference.text.take(30)}...")
+                    
+                    val declaration = JsFileResolver.findVariableDeclaration(reference)
+                    if (declaration == null) {
+                        LOG.info("Could not find variable declaration for: ${reference.text.take(30)}...")
+                        return emptyMap()
+                    }
+                    
+                    LOG.info("Found variable declaration: ${declaration.text.take(30)}...")
+                    
+                    val objectLiteral = JsFileResolver.getObjectLiteralFromDeclaration(declaration)
+                    if (objectLiteral == null) {
+                        LOG.info("Could not get object literal from declaration: ${declaration.text.take(30)}...")
+                        return emptyMap()
+                    }
+                    
+                    LOG.info("Found object literal: ${objectLiteral.text.take(30)}...")
+                    
+                    extractPropsFromObjectLiteral(objectLiteral)
+                } catch (e: Exception) {
+                    LOG.error("Error resolving reference expression: ${e.message}", e)
+                    emptyMap()
+                }
+            }
+            is JSObjectLiteralExpression -> {
+                extractPropsFromObjectLiteral(expression)
+            }
+            else -> {
+                LOG.info("Unsupported expression type: ${expression.javaClass.name}")
+                emptyMap()
+            }
+        }
+    }
+
+    private fun extractPropsFromObjectLiteral(objectLiteral: JSObjectLiteralExpression): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        
+        LOG.info("Extracting props from object literal with ${objectLiteral.properties.size} properties")
+        
+        objectLiteral.properties.forEach { property ->
+            val propName = property.name
+            if (propName != null) {
+                LOG.info("Processing property: $propName")
+                val propValue = extractPropertyDetails(property)
+                if (propValue.isNotEmpty()) {
+                    result[propName] = propValue
+                }
+            }
+        }
+        
+        LOG.info("Extracted props: $result")
+        return result
+    }
+    
+    private fun extractPropertyDetails(property: JSProperty): String {
+        val value = property.value ?: return ""
+        
+        return try {
+            when {
+                value is JSObjectLiteralExpression -> {
+                    buildString {
+                        var hasType = false
+                        var hasRequired = false
+                        var hasDefault = false
+                        
+                        value.properties.forEach { prop ->
+                            val propName = prop.name ?: return@forEach
+                            val propValue = prop.value?.text?.trim() ?: return@forEach
+                            
+                            when (propName) {
+                                "type" -> {
+                                    append("type: $propValue")
+                                    hasType = true
+                                }
+                                "required" -> {
+                                    if (hasType) append(", ")
+                                    append("required: $propValue")
+                                    hasRequired = true
+                                }
+                                "default" -> {
+                                    if (hasType || hasRequired) append(", ")
+                                    append("default: $propValue")
+                                    hasDefault = true
+                                }
+                            }
+                        }
+                        
+                        if (!hasType && !hasRequired && !hasDefault) {
+                            append(JsFileResolver.getPropertyValueAsString(property))
+                        }
+                    }
+                }
+                else -> JsFileResolver.getPropertyValueAsString(property)
+            }
+        } catch (e: Exception) {
+            LOG.error("Error extracting property details: ${e.message}", e)
+            ""
+        }
+    }
+}
