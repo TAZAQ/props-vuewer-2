@@ -68,15 +68,24 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
                 try {
                     when (element) {
                         is JSSpreadExpression -> {
-                            if (VueFileUtils.isInsidePropsDefinition(element)) {
+                            logger.info("Обнаружен JSSpreadExpression: ${element.text}")
+                            
+                            // Проверяем, что элемент находится в определении props
+                            val isInsideProps = VueFileUtils.isInsidePropsDefinition(element)
+                            logger.info("JSSpreadExpression внутри props: $isInsideProps")
+                            
+                            if (isInsideProps) {
                                 logger.info("Found JSSpreadExpression in props: ${element.text}")
                                 
                                 val project = element.project
                                 val propsService = VuePropsService.getInstance(project)
                                 val propsInfo = propsService.resolveSpreadProps(element)
                                 
+                                logger.info("Получены данные props: ${propsInfo.size} свойств")
+                                
                                 if (propsInfo.isNotEmpty()) {
                                     val presentation = createPropsPresentation(propsInfo, factory)
+                                    logger.info("Создана презентация: ${presentation.toString()}")
                                     
                                     // Добавляем инлайн подсказку после spread выражения
                                     sink.addInlineElement(
@@ -87,7 +96,11 @@ class VuePropsInlayHintsProvider : InlayHintsProvider<VuePropsInlayHintsProvider
                                     )
                                     
                                     logger.info("Added inline hint for spread props")
+                                } else {
+                                    logger.info("Не удалось получить информацию о свойствах для ${element.text}")
                                 }
+                            } else {
+                                logger.info("JSSpreadExpression не внутри props, пропускаем")
                             }
                         }
                         

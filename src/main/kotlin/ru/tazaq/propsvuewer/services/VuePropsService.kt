@@ -27,12 +27,19 @@ class VuePropsService(private val project: Project) {
 
     fun resolveSpreadProps(spreadExpression: JSSpreadExpression): Map<String, String> {
         LOG.info("Resolving spread props for: ${spreadExpression.text}")
+        
         val operand = spreadExpression.expression
         if (operand == null) {
             LOG.info("No operand found in spread expression")
             return emptyMap()
         }
-        return resolveProps(operand)
+        
+        LOG.info("Найден операнд спред-выражения: ${operand.text} (тип: ${operand.javaClass.simpleName})")
+        
+        val result = resolveProps(operand)
+        LOG.info("Результат разрешения props: ${result.size} свойств - ${result.keys.joinToString(", ")}")
+        
+        return result
     }
 
     fun resolveDirectProps(propsExpression: JSObjectLiteralExpression): Map<String, String> {
@@ -65,10 +72,14 @@ class VuePropsService(private val project: Project) {
         return when (expression) {
             is JSReferenceExpression -> {
                 try {
+                    // Дополнительное логирование имени ссылки
+                    LOG.info("Разрешение ссылки: ${expression.referenceName ?: "безымянная ссылка"}")
+                    
                     val reference = expression.resolve()
                     if (reference == null) {
                         LOG.info("Could not resolve reference: ${expression.text}")
-                        return emptyMap()
+                        // Для отладки создадим тестовое свойство
+                        return mapOf("debugProp" to "type: String, cannot resolve reference")
                     }
                     
                     LOG.info("Resolved reference: ${reference.text.take(30)}...")
@@ -76,7 +87,8 @@ class VuePropsService(private val project: Project) {
                     val declaration = JsFileResolver.findVariableDeclaration(reference)
                     if (declaration == null) {
                         LOG.info("Could not find variable declaration for: ${reference.text.take(30)}...")
-                        return emptyMap()
+                        // Для отладки создадим тестовое свойство
+                        return mapOf("debugProp" to "type: String, cannot find declaration")
                     }
                     
                     LOG.info("Found variable declaration: ${declaration.text.take(30)}...")
@@ -84,25 +96,41 @@ class VuePropsService(private val project: Project) {
                     val objectLiteral = JsFileResolver.getObjectLiteralFromDeclaration(declaration)
                     if (objectLiteral == null) {
                         LOG.info("Could not get object literal from declaration: ${declaration.text.take(30)}...")
-                        return emptyMap()
+                        // Для отладки создадим тестовое свойство
+                        return mapOf("debugProp" to "type: String, cannot extract object literal")
                     }
                     
                     LOG.info("Found object literal: ${objectLiteral.text.take(30)}...")
                     
-                    extractPropsFromObjectLiteral(objectLiteral)
+                    val result = extractPropsFromObjectLiteral(objectLiteral)
+                    if (result.isEmpty()) {
+                        LOG.info("Не удалось извлечь свойства из объектного литерала")
+                        // Для отладки создадим тестовое свойство
+                        return mapOf("debugProp" to "type: String, extracted empty props")
+                    }
+                    
+                    result
                 } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
                     throw e // Пробрасываем ProcessCanceledException дальше
                 } catch (e: Exception) {
                     LOG.info("Error resolving reference expression: ${e.message}")
-                    emptyMap()
+                    // Для отладки создадим тестовое свойство с информацией об ошибке
+                    mapOf("debugProp" to "type: String, error: ${e.message}")
                 }
             }
             is JSObjectLiteralExpression -> {
-                extractPropsFromObjectLiteral(expression)
+                val result = extractPropsFromObjectLiteral(expression)
+                if (result.isEmpty()) {
+                    LOG.info("Не удалось извлечь свойства из JSObjectLiteralExpression")
+                    // Для отладки создадим тестовое свойство
+                    return mapOf("debugProp" to "type: String, extracted empty props from literal")
+                }
+                result
             }
             else -> {
                 LOG.info("Unsupported expression type: ${expression.javaClass.name}")
-                emptyMap()
+                // Для отладки создадим тестовое свойство
+                mapOf("debugProp" to "type: String, unsupported type: ${expression.javaClass.simpleName}")
             }
         }
     }

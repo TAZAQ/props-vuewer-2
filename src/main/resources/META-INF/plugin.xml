@@ -13,7 +13,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <codeInsight.lineMarkerProvider language="JavaScript" implementationClass="ru.tazaq.propsvuewer.markers.VuePropsLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="Vue" implementationClass="ru.tazaq.propsvuewer.markers.VuePropsLineMarkerProvider"/>
-        <codeInsight.inlayProvider language="JavaScript" implementationClass="ru.tazaq.propsvuewer.hints.VuePropsInlayHintsProvider"/>
-        <codeInsight.inlayProvider language="Vue" implementationClass="ru.tazaq.propsvuewer.hints.VuePropsInlayHintsProvider"/>
+        <codeInsight.inlayProvider language="JavaScript" implementationClass="ru.tazaq.propsvuewer.hints.VuePropsInlayHintsProvider" id="vue.props.inlay.js"/>
+        <codeInsight.inlayProvider language="Vue" implementationClass="ru.tazaq.propsvuewer.hints.VuePropsInlayHintsProvider" id="vue.props.inlay.vue"/>
     </extensions>
 </idea-plugin>
