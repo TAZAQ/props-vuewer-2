@@ -9,50 +9,48 @@ import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
+import ru.tazaq.propsvuewer.constants.VueConstants
 
-/**
- * Utilities for resolving JS/TS imports and locating default exports.
- */
 object ImportUtils {
     private val LOG = Logger.getInstance(ImportUtils::class.java)
 
-    /**
-     * Resolve a relative or alias import path to a PsiFile.
-     * Handles missing extensions and "index.*" files.
-     */
     fun resolveImportToFile(contextFile: PsiFile, rawPath: String): PsiFile? {
         val normalized = rawPath.trim('\'', '"', '`').trim()
         val project = contextFile.project
 
-        // 1) Попытка: относительный/абсолютный путь
+        // Try relative/absolute path
         val baseDir = contextFile.containingDirectory?.virtualFile
         if (baseDir != null && (normalized.startsWith(".") || normalized.startsWith("/"))) {
             resolveAgainst(baseDir, normalized, project)?.let { return it }
         }
 
-        // 2) Попытка: алиасы (поддерживаем минимум '@')
+        // Try alias resolution
         resolveAliasPath(contextFile, normalized)?.let { return it }
 
-        LOG.info("resolveImportToFile: cannot resolve path: $normalized")
+        LOG.debug("Cannot resolve import path: $normalized")
         return null
     }
 
     private fun resolveAgainst(base: com.intellij.openapi.vfs.VirtualFile, path: String, project: Project): PsiFile? {
-        val tryPaths = mutableListOf<String>()
-        tryPaths += path
+        val tryPaths = buildList {
+            add(path)
 
-        val lastSegment = path.substringAfterLast('/', path)
-        val hasExt = lastSegment.contains('.')
-        val exts = listOf(".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue")
-
-        if (!hasExt) {
-            exts.forEach { ext -> tryPaths += "$path$ext" }
-            exts.forEach { ext -> tryPaths += "$path/index$ext" }
+            val lastSegment = path.substringAfterLast('/', path)
+            if (!lastSegment.contains('.')) {
+                VueConstants.JS_FILE_EXTENSIONS.forEach { ext -> 
+                    add("$path$ext")
+                    add("$path/index$ext")
+                }
+            }
         }
 
         for (candidate in tryPaths) {
-            val vf = if (candidate.startsWith("/")) LocalFileSystem.getInstance().findFileByPath(candidate)
-            else VfsUtilCore.findRelativeFile(candidate, base)
+            val vf = if (candidate.startsWith("/")) {
+                LocalFileSystem.getInstance().findFileByPath(candidate)
+            } else {
+                VfsUtilCore.findRelativeFile(candidate, base)
+            }
+
             if (vf != null) {
                 PsiManager.getInstance(project).findFile(vf)?.let { return it }
             }
@@ -64,26 +62,17 @@ object ImportUtils {
         val project = contextFile.project
         val basePath = project.basePath ?: return null
 
-        // Поддерживаем алиас вида "@/..."
-        val isAtAlias = importPath.startsWith("@/")
-        if (!isAtAlias && !importPath.startsWith("@")) {
-            return null
-        }
+        if (!importPath.startsWith("@")) return null
+
         val sub = importPath.removePrefix("@/").removePrefix("@").removePrefix("/")
 
-        val aliasRoots = mutableListOf<String>()
-        aliasRoots += getTsconfigAliasRoots(project, "@/*")
-        aliasRoots += getWebpackAliasRoot(project, "@")?.let { listOf(it) } ?: emptyList()
+        val aliasRoots = buildList {
+            addAll(getTsconfigAliasRoots(project, "@/*"))
+            getWebpackAliasRoot(project, "@")?.let { add(it) }
 
-        // Набор дефолтов на случай отсутствия конфигов
-        if (aliasRoots.isEmpty()) {
-            aliasRoots += listOf(
-                "src",
-                "app/javascript/src",
-                "app/javascript",
-                "frontend/src",
-                "resources/js"
-            )
+            if (isEmpty()) {
+                addAll(listOf("src", "app/javascript/src", "app/javascript", "frontend/src", "resources/js"))
+            }
         }
 
         val projectRootVf = LocalFileSystem.getInstance().findFileByPath(basePath) ?: return null
@@ -97,54 +86,46 @@ object ImportUtils {
     private fun getTsconfigAliasRoots(project: Project, aliasKey: String): List<String> {
         val basePath = project.basePath ?: return emptyList()
         val ts = LocalFileSystem.getInstance().findFileByPath("$basePath/tsconfig.json") ?: return emptyList()
-        val text = VfsUtilCore.loadText(ts).toString()
+        val text = VfsUtilCore.loadText(ts)
 
-        val baseUrl = Regex("\"baseUrl\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.getOrNull(1)?.ifBlank { null }
-        val m = Regex("\"${Regex.escape(aliasKey)}\"\\s*:\\s*\\[(.*?)\\]", RegexOption.DOT_MATCHES_ALL).find(text)
-            ?: return emptyList()
+        val baseUrl = Regex("\"baseUrl\"\\s*:\\s*\"([^\"]+)\"")
+            .find(text)?.groupValues?.getOrNull(1)?.ifBlank { null }
+
+        val m = Regex("\"${Regex.escape(aliasKey)}\"\\s*:\\s*\\[(.*?)]", RegexOption.DOT_MATCHES_ALL)
+            .find(text) ?: return emptyList()
+
         val entries = Regex("\"([^\"]+)\"").findAll(m.groupValues[1]).map { it.groupValues[1] }.toList()
-        val roots = entries.mapNotNull { raw ->
-            var p = raw.removeSuffix("/*")
-            if (p.startsWith("./")) p = p.removePrefix("./")
-            // игнорируем node_modules/* alias
+
+        return entries.mapNotNull { raw ->
+            val p = raw.removeSuffix("/*").removePrefix("./")
             if (p.startsWith("node_modules")) return@mapNotNull null
             if (baseUrl != null && !p.startsWith("/")) "$baseUrl/$p" else p
-        }
-        return roots.distinct()
+        }.distinct()
     }
 
     private fun getWebpackAliasRoot(project: Project, alias: String): String? {
         val basePath = project.basePath ?: return null
         val wp = LocalFileSystem.getInstance().findFileByPath("$basePath/webpack.config.js") ?: return null
-        val text = VfsUtilCore.loadText(wp).toString()
+        val text = VfsUtilCore.loadText(wp)
 
-        // alias: { '@': path.resolve(__dirname, 'app/javascript/src'), }
         val r = Regex("['\"]${Regex.escape(alias)}['\"]\\s*:\\s*path\\.resolve\\(\\s*__dirname\\s*,\\s*['\"]([^'\"]+)['\"]\\s*\\)")
         return r.find(text)?.groupValues?.getOrNull(1)
     }
 
-    /**
-     * Finds an object literal that is being exported via `export default ...` in the given file.
-     * Supports direct export default of an object or via a referenced variable.
-     */
     fun findDefaultExportObjectLiteral(file: PsiFile): JSObjectLiteralExpression? {
-        return try {
+        return ExceptionHandler.withProcessCancellationSafe(null) {
             val exports = PsiTreeUtil.findChildrenOfType(file, JSElement::class.java)
-            if (exports.isEmpty()) return null
+            if (exports.isEmpty()) return@withProcessCancellationSafe null
 
             val defaultExport = exports.firstOrNull {
                 val cls = it.javaClass.simpleName
-                cls.contains("Export") && (cls.contains("Default") || it.text.contains("export default"))
-            } ?: return null
+                cls.contains(VueConstants.EXPORT_CLASS_PATTERN) && 
+                (cls.contains(VueConstants.DEFAULT_EXPORT_PATTERN) || it.text.contains("export default"))
+            } ?: return@withProcessCancellationSafe null
 
-            LOG.info("findDefaultExportObjectLiteral: export node: ${defaultExport.javaClass.simpleName}")
+            LOG.debug("Found default export: ${defaultExport.javaClass.simpleName}")
 
             JsFileResolver.getObjectLiteralFromExport(defaultExport)
-        } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
-            throw e
-        } catch (t: Throwable) {
-            LOG.warn("findDefaultExportObjectLiteral failed for ${file.name}: ${t.message}")
-            null
         }
     }
 }

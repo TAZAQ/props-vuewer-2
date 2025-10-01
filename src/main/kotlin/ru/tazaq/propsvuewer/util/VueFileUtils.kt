@@ -6,70 +6,57 @@ import com.intellij.lang.javascript.psi.JSProperty
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
+import ru.tazaq.propsvuewer.constants.VueConstants
 
 object VueFileUtils {
     private val LOG = Logger.getInstance(VueFileUtils::class.java)
-    
-    /**
-     * Проверяет, находится ли элемент внутри определения props в компоненте Vue
-     */
+
     fun isInsidePropsDefinition(element: PsiElement): Boolean {
-        // Пытаемся получить свойство, в котором находится элемент
         val property = PsiTreeUtil.getParentOfType(element, JSProperty::class.java)
-        
+
         if (property == null) {
-            LOG.info("isInsidePropsDefinition: свойство не найдено для элемента ${element.text}")
-            
-            // Дополнительная проверка для спред-операторов
-            val parentObject = PsiTreeUtil.getParentOfType(element, JSObjectLiteralExpression::class.java)
-            if (parentObject != null) {
-                val parentProperty = PsiTreeUtil.getParentOfType(parentObject, JSProperty::class.java)
-                if (parentProperty != null && parentProperty.name == "props") {
-                    val isInsideVue = isInsideVueComponent(parentProperty)
-                    LOG.info("isInsidePropsDefinition: проверка через родительский объект: isProps=true, isInsideVue=$isInsideVue")
-                    return isInsideVue
-                }
-            }
-            
+            LOG.debug("Property not found, checking parent object")
+            return checkParentObjectForProps(element)
+        }
+
+        val isProps = property.name == VueConstants.PROPS_PROPERTY_NAME
+        val isInsideVue = isInsideVueComponent(property)
+
+        LOG.debug("isInsidePropsDefinition: isProps=$isProps, isInsideVue=$isInsideVue")
+
+        return isProps && isInsideVue
+    }
+
+    private fun isInsideVueComponent(element: PsiElement): Boolean {
+        val containingFile = element.containingFile ?: return false
+        val fileName = containingFile.name
+
+        if (fileName.endsWith(VueConstants.VUE_FILE_EXTENSION)) {
+            return true
+        }
+
+        if (containingFile is JSFile) {
+            val text = containingFile.text
+            return VueConstants.VUE_COMPONENT_PATTERNS.any { text.contains(it) }
+        }
+
+        return false
+    }
+
+    private fun checkParentObjectForProps(element: PsiElement): Boolean {
+        val parentObject = PsiTreeUtil.getParentOfType(element, JSObjectLiteralExpression::class.java)
+            ?: return false
+
+        val parentProperty = PsiTreeUtil.getParentOfType(parentObject, JSProperty::class.java)
+            ?: return false
+
+        if (parentProperty.name != VueConstants.PROPS_PROPERTY_NAME) {
             return false
         }
-        
-        val isProps = property.name == "props"
-        val isInsideVue = isInsideVueComponent(property)
-        
-        LOG.info("isInsidePropsDefinition: isProps=$isProps, isInsideVue=$isInsideVue, element=${element.text}")
-        
-        return isProps && isInsideVue
-    }
-    
-    /**
-     * Проверяет, является ли объект прямым присваиванием props
-     */
-    fun isDirectPropsAssignment(objectLiteral: JSObjectLiteralExpression): Boolean {
-        val property = PsiTreeUtil.getParentOfType(objectLiteral, JSProperty::class.java) ?: return false
-        val isProps = property.name == "props"
-        val isInsideVue = isInsideVueComponent(property)
-        
-        LOG.info("isDirectPropsAssignment: isProps=$isProps, isInsideVue=$isInsideVue, objectLiteral=${objectLiteral.text}")
-        
-        return isProps && isInsideVue
-    }
-    
-    /**
-     * Проверяет, находится ли элемент внутри компонента Vue
-     */
-    fun isInsideVueComponent(element: PsiElement): Boolean {
-        // Проверка на наличие в структуре Vue файла
-        val containingFile = element.containingFile ?: return false
-        val isVueFile = containingFile.name.endsWith(".vue")
-        
-        // В случае JS файла проверяем на возможный импорт из Vue
-        val isJsInVueContext = !isVueFile && containingFile is JSFile && 
-                containingFile.text.contains("Vue.component") || 
-                containingFile.text.contains("export default")
-        
-        LOG.info("isInsideVueComponent: file=${containingFile.name}, isVueFile=$isVueFile, isJsInVueContext=$isJsInVueContext")
-        
-        return isVueFile || isJsInVueContext
+
+        val isInsideVue = isInsideVueComponent(parentProperty)
+        LOG.debug("Checked via parent object: isProps=true, isInsideVue=$isInsideVue")
+
+        return isInsideVue
     }
 }
