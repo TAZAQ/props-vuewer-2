@@ -19,7 +19,12 @@ dependencies {
         create("IU", "2025.1")
         bundledPlugin("JavaScript")
         bundledPlugin("org.jetbrains.plugins.vue")
+
+        testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
+        testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Plugin.JavaScript)
     }
+
+    testImplementation("junit:junit:4.13.2")
 }
 
 intellijPlatform {
@@ -42,6 +47,13 @@ tasks {
         kotlinOptions {
             jvmTarget = "21"
             freeCompilerArgs = listOf("-Xjvm-default=all")
+        }
+    }
+
+    test {
+        useJUnit()
+        testLogging {
+            events("passed", "skipped", "failed")
         }
     }
 }
