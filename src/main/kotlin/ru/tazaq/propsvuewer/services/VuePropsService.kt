@@ -1,19 +1,14 @@
 package ru.tazaq.propsvuewer.services
 
-import com.intellij.lang.javascript.psi.JSExpression
-import com.intellij.lang.javascript.psi.JSObjectLiteralExpression
-import com.intellij.lang.javascript.psi.JSProperty
-import com.intellij.lang.javascript.psi.JSReferenceExpression
-import com.intellij.lang.javascript.psi.JSSpreadExpression
+import com.intellij.lang.javascript.psi.*
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiManager
-import com.intellij.psi.search.GlobalSearchScope
-import com.intellij.psi.util.PsiTreeUtil
+import ru.tazaq.propsvuewer.util.ImportUtils
 import ru.tazaq.propsvuewer.util.JsFileResolver
+
 
 @Service(Service.Level.PROJECT)
 class VuePropsService(private val project: Project) {
@@ -27,25 +22,25 @@ class VuePropsService(private val project: Project) {
 
     fun resolveSpreadProps(spreadExpression: JSSpreadExpression): Map<String, String> {
         LOG.info("Resolving spread props for: ${spreadExpression.text}")
-        
+
         val operand = spreadExpression.expression
         if (operand == null) {
             LOG.info("No operand found in spread expression")
             return emptyMap()
         }
-        
+
         LOG.info("Найден операнд спред-выражения: ${operand.text} (тип: ${operand.javaClass.simpleName})")
-        
+
         val result = resolveProps(operand)
         LOG.info("Результат разрешения props: ${result.size} свойств - ${result.keys.joinToString(", ")}")
-        
+
         return result
     }
 
     fun resolveDirectProps(propsExpression: JSObjectLiteralExpression): Map<String, String> {
         LOG.info("Resolving direct props for object literal: ${propsExpression.text.take(30)}...")
         val result = mutableMapOf<String, String>()
-        
+
         try {
             propsExpression.properties.forEach { property ->
                 val propName = property.name
@@ -62,7 +57,7 @@ class VuePropsService(private val project: Project) {
         } catch (e: Exception) {
             LOG.info("Error processing direct props: ${e.message}")
         }
-        
+
         LOG.info("Resolved direct props: $result")
         return result
     }
@@ -75,56 +70,107 @@ class VuePropsService(private val project: Project) {
                     // Дополнительное логирование имени ссылки
                     val refName = expression.referenceName ?: "безымянная ссылка"
                     LOG.info("Разрешение ссылки: $refName")
-                    
-                    // Для более удобного тестирования - если мы не можем разрешить реальные свойства,
-                    // создадим фиктивные свойства на основе имени ссылки
-                    val demoProps = createDemoPropsForReference(refName)
-                    if (demoProps.isNotEmpty()) {
-                        LOG.info("Созданы демонстрационные свойства для $refName")
-                        return demoProps
-                    }
-                    
+
                     val reference = expression.resolve()
                     if (reference == null) {
                         LOG.info("Could not resolve reference: ${expression.text}")
-                        // Для отладки создадим тестовое свойство
-                        return mapOf("propFromRef1" to "String, required: true")
+                        return emptyMap()
                     }
-                    
-                    LOG.info("Resolved reference: ${reference.text.take(30)}...")
-                    
+
+                    val className = reference.javaClass.simpleName
+                    val fullClassName = reference.javaClass.name
+                    LOG.info("Resolved reference: ${reference.text.take(50)}... (класс: $className, полное имя: $fullClassName)")
+
+                    // ====== ОБРАБОТКА ES6ImportedBindingImpl - ДОЛЖНА БЫТЬ ПЕРВОЙ! ======
+                    if (className == "ES6ImportedBindingImpl" || className.contains("ImportedBinding")) {
+                        LOG.info("Импортированный биндинг обнаружен, пытаемся найти export default")
+
+                        var importDeclaration: PsiElement? = null
+                        try {
+                            val getDeclarationMethod = reference.javaClass.getMethod("getDeclaration")
+                            importDeclaration = getDeclarationMethod.invoke(reference) as? PsiElement
+                            LOG.info("getDeclaration() вернул: ${importDeclaration?.javaClass?.simpleName}")
+                        } catch (e: Exception) {
+                            LOG.info("Ошибка при вызове getDeclaration(): ${e.message}")
+                        }
+
+                        if (importDeclaration != null) {
+                            try {
+                                val fromClauseMethod = importDeclaration.javaClass.getMethod("getFromClause")
+                                val fromClause = fromClauseMethod.invoke(importDeclaration) as? PsiElement
+                                LOG.info("fromClause: ${fromClause?.javaClass?.simpleName}, текст: ${fromClause?.text}")
+
+                                if (fromClause != null) {
+                                    // Извлечь путь из fromClause
+                                    val pathMatch = Regex("""from\s+['"](.+?)['"]""").find(fromClause.text)
+                                    val importPath = pathMatch?.groupValues?.getOrNull(1)
+                                    LOG.info("Извлечён путь импорта: $importPath")
+
+                                    if (!importPath.isNullOrBlank()) {
+                                        val currentFile = expression.containingFile
+                                        val importedPsi = ImportUtils.resolveImportToFile(currentFile, importPath)
+
+                                        if (importedPsi != null) {
+                                            val objectLiteral = ImportUtils.findDefaultExportObjectLiteral(importedPsi)
+                                            if (objectLiteral != null) {
+                                                val result = extractPropsFromObjectLiteral(objectLiteral)
+                                                if (result.isNotEmpty()) {
+                                                    LOG.info("Получены props из default export: ${result.size}")
+                                                    return result
+                                                }
+                                            } else {
+                                                LOG.info("Не найден объектный литерал в export default файла ${importedPsi.name}")
+                                            }
+                                        } else {
+                                            LOG.info("Не удалось разрешить импортируемый файл: $importPath")
+                                        }
+                                    }
+                                }
+                            } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+                                // Важное: не логируем PCE — немедленно пробрасываем дальше
+                                throw e
+                            } catch (t: Throwable) {
+                                // Не критично для работы — просто предупреждение
+                                LOG.warn("Ошибка при обработке importDeclaration: ${t.message}")
+                            }
+                        }
+
+                        // Не удалось обработать default import
+                        return emptyMap()
+                    }
+
+                    // ====== ОБРАБОТКА ОБЫЧНЫХ ПЕРЕМЕННЫХ ======
                     val declaration = JsFileResolver.findVariableDeclaration(reference)
                     if (declaration == null) {
                         LOG.info("Could not find variable declaration for: ${reference.text.take(30)}...")
-                        // Для отладки создадим тестовое свойство
-                        return mapOf("propFromRef2" to "Number, default: 42")
+                        return emptyMap()
                     }
-                    
+
                     LOG.info("Found variable declaration: ${declaration.text.take(30)}...")
-                    
+
                     val objectLiteral = JsFileResolver.getObjectLiteralFromDeclaration(declaration)
                     if (objectLiteral == null) {
                         LOG.info("Could not get object literal from declaration: ${declaration.text.take(30)}...")
-                        // Для отладки создадим тестовое свойство
-                        return mapOf("propFromRef3" to "Boolean, default: false")
+                        return emptyMap()
                     }
-                    
+
                     LOG.info("Found object literal: ${objectLiteral.text.take(30)}...")
-                    
+
                     val result = extractPropsFromObjectLiteral(objectLiteral)
                     if (result.isEmpty()) {
                         LOG.info("Не удалось извлечь свойства из объектного литерала")
-                        // Для отладки создадим тестовое свойство
-                        return mapOf("propFromRef4" to "Object, required: true")
+                        return emptyMap()
                     }
-                    
+
                     result
                 } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
-                    throw e // Пробрасываем ProcessCanceledException дальше
-                } catch (e: Exception) {
-                    LOG.info("Error resolving reference expression: ${e.message}")
-                    // Для отладки создадим тестовое свойство с информацией об ошибке
-                    mapOf("propFromRef5" to "Array, default: []")
+                    // Никогда не логируем PCE — IDE может отменять вычисление в любой момент
+                    throw e
+                } catch (t: Throwable) {
+                    // Если внутри cause/suppressed есть PCE — тоже пробрасываем
+                    if (isProcessCanceled(t)) throw t
+                    LOG.warn("Error resolving reference expression: ${t.message}")
+                    emptyMap()
                 }
             }
             is JSObjectLiteralExpression -> {
@@ -144,18 +190,6 @@ class VuePropsService(private val project: Project) {
         }
     }
     
-    /**
-     * Создает демонстрационные props для тестирования на основе имени ссылки
-     */
-    private fun createDemoPropsForReference(refName: String): Map<String, String> {
-        // Отключаем автоматическое создание демо-свойств по имени
-        // Это временное решение, пока мы не научимся правильно резолвить импорты
-        return emptyMap()
-        
-        // Для будущей реализации - здесь нужно будет искать определения в импортированных файлах
-        // или через PSI элементы определять реальный тип переменной
-    }
-
     private fun extractPropsFromObjectLiteral(objectLiteral: JSObjectLiteralExpression): Map<String, String> {
         val result = mutableMapOf<String, String>()
         
@@ -226,5 +260,13 @@ class VuePropsService(private val project: Project) {
             LOG.info("Error extracting property details: ${e.message}")
             ""
         }
+    }
+    private fun isProcessCanceled(t: Throwable): Boolean {
+        var cur: Throwable? = t
+        while (cur != null) {
+            if (cur is com.intellij.openapi.progress.ProcessCanceledException) return true
+            cur = cur.cause
+        }
+        return t.suppressed.any { it is com.intellij.openapi.progress.ProcessCanceledException }
     }
 }

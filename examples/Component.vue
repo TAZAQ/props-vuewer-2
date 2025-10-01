@@ -56,6 +56,13 @@ export default {
 
     clientEdited: Boolean,
 
+
+
+
+
+
+
+    
     ...propsClient,
     ...propsClientTabs,
     ...propsClientAddress,

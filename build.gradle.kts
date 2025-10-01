@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "ru.tazaq"
-version = "0.0.15"
+version = "0.0.16"
 
 repositories {
     mavenCentral()
@@ -28,7 +28,7 @@ intellijPlatform {
             sinceBuild = "251"
         }
         changeNotes = """
-            Улучшенная версия с многострочным отображением всех props Vue компонентов.
+            Fixed exported default props.
         """.trimIndent()
     }
 }
